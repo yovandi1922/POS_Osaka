@@ -1,0 +1,15 @@
+# apps/admin/analysis_options.yaml
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - build/**
+    - web/**
+  language:
+    strict-casts: true
+    strict-raw-types: true
+
+linter:
+  rules:
+    prefer_const_constructors: true
+    prefer_final_locals: true

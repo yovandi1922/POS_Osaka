@@ -1,0 +1,18 @@
+# packages/coffee_core/pubspec.yaml
+# Paket Dart bersama untuk apps/mobile (kasir) dan apps/admin (web admin):
+# model tabel, format Rupiah/WIB, repository Supabase, prediksi omset, klien API chat.
+name: coffee_core
+description: Shared models, formatting, Supabase repository, and revenue prediction for Coffee POS.
+version: 1.0.0
+publish_to: none
+
+environment:
+  sdk: ^3.9.0
+
+dependencies:
+  http: ^1.6.0
+  supabase: ^2.16.5
+
+dev_dependencies:
+  lints: ^6.1.0
+  test: ^1.33.0

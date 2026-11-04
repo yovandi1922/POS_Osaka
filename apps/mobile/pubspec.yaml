@@ -1,0 +1,24 @@
+# apps/mobile/pubspec.yaml — Aplikasi kasir (Flutter, Android/iOS)
+name: coffee_pos_mobile
+description: Coffee POS — aplikasi kasir (transaksi, stok, pengeluaran, laporan, asisten AI).
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.9.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  coffee_core:
+    path: ../../packages/coffee_core
+  provider: ^6.1.5
+  supabase_flutter: ^2.18.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

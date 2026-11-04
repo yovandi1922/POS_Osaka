@@ -1,0 +1,14 @@
+# Simpan teks dengan akhir baris LF di repository (konsisten lintas Windows/macOS/Linux).
+* text=auto eol=lf
+
+# Skrip Windows tetap CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Biner
+*.png binary
+*.jpg binary
+*.ico binary
+*.jar binary
+*.otf binary
+*.ttf binary

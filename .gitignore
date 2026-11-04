@@ -1,0 +1,38 @@
+# .gitignore
+node_modules/
+.pnpm-store/
+
+# env / rahasia
+.env
+.env.local
+.env.*.local
+apps/*/.env
+apps/*/.env.local
+apps/*/env.json
+
+# next (apps/api)
+apps/api/.next/
+apps/api/next-env.d.ts
+apps/api/*.tsbuildinfo
+.vercel
+
+# flutter / dart
+.dart_tool/
+build/
+*.iml
+.flutter-plugins
+.flutter-plugins-dependencies
+apps/mobile/android/local.properties
+apps/mobile/android/key.properties
+apps/mobile/android/app/upload-keystore.jks
+*.jks
+*.keystore
+
+# supabase
+supabase/.temp/
+supabase/.branches/
+
+# misc
+.DS_Store
+*.log
+coverage/

@@ -1,0 +1,13 @@
+# supabase/config.toml
+# Konfigurasi minimal untuk Supabase CLI (supabase link / db push / start).
+# Nilai lain memakai default CLI.
+project_id = "coffee-pos"
+
+[auth]
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000"]
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+enable_confirmations = false

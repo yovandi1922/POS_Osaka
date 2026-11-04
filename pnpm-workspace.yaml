@@ -1,0 +1,4 @@
+# pnpm-workspace.yaml — hanya backend API yang berbasis Node.js.
+# apps/mobile & apps/admin adalah proyek Flutter (dikelola `flutter pub`).
+packages:
+  - "apps/api"
