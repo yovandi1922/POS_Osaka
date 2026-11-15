@@ -187,6 +187,19 @@ class Recipe {
       );
 }
 
+/// HPP per porsi dari resep: Σ (takaran × harga/satuan bahan), dibulatkan 2 desimal.
+/// Mengembalikan null bila menu belum punya resep (HPP tidak bisa dihitung).
+double? recipeCost(String menuItemId, Iterable<Recipe> recipes, Map<String, Ingredient> ingredientsById) {
+  var found = false;
+  var total = 0.0;
+  for (final r in recipes) {
+    if (r.menuItemId != menuItemId) continue;
+    found = true;
+    total += r.qtyNeeded * (ingredientsById[r.ingredientId]?.costPerUnit ?? 0);
+  }
+  return found ? (total * 100).roundToDouble() / 100 : null;
+}
+
 class TransactionItem {
   const TransactionItem({
     required this.id,
@@ -265,6 +278,64 @@ class SaleTransaction {
       createdAt: _time(j['created_at']),
       cashierName: (cashierName != null && cashierName.isNotEmpty) ? cashierName : _str(cashier?['email']),
       items: _list(j['transaction_items']).map(TransactionItem.fromJson).toList(),
+    );
+  }
+}
+
+enum QrisStatus {
+  pending,
+  processing,
+  paid,
+  expired,
+  cancelled,
+  failed;
+
+  static QrisStatus parse(Object? v) =>
+      QrisStatus.values.firstWhere((s) => s.name == v, orElse: () => QrisStatus.failed);
+}
+
+/// Pembayaran QRIS dinamis (Midtrans) dari /api/payments/qris.
+class QrisPayment {
+  const QrisPayment({
+    required this.orderId,
+    required this.status,
+    required this.grossAmount,
+    this.qrString,
+    this.qrUrl,
+    this.expiresAt,
+    this.error,
+    this.transaction,
+    this.isProduction = false,
+  });
+
+  final String orderId;
+  final QrisStatus status;
+  final double grossAmount;
+  final String? qrString;
+  final String? qrUrl;
+  final DateTime? expiresAt;
+  final String? error;
+
+  /// Terisi setelah status [QrisStatus.paid].
+  final SaleTransaction? transaction;
+  final bool isProduction;
+
+  /// Masih menunggu pembayaran / sedang dicatat → lanjutkan polling.
+  bool get isWaiting => status == QrisStatus.pending || status == QrisStatus.processing;
+
+  factory QrisPayment.fromJson(Json j) {
+    final tx = _obj(j['transaction']);
+    final expires = _str(j['expires_at']);
+    return QrisPayment(
+      orderId: _str(j['order_id']) ?? '',
+      status: QrisStatus.parse(j['status']),
+      grossAmount: _toDouble(j['gross_amount']),
+      qrString: _str(j['qr_string']),
+      qrUrl: _str(j['qr_url']),
+      expiresAt: expires == null ? null : DateTime.tryParse(expires),
+      error: _str(j['error']),
+      transaction: tx == null ? null : SaleTransaction.fromJson(tx),
+      isProduction: j['is_production'] == true,
     );
   }
 }

@@ -1,6 +1,6 @@
 // apps/admin/lib/pages/menu_page.dart
-// Form tambah menu + tabel dengan toggle aktif, ubah harga/HPP, kategori, dan editor resep
-// (resep menentukan potong stok otomatis saat checkout).
+// Form tambah menu + tabel dengan toggle aktif, ubah harga, kategori, dan editor resep.
+// Resep menentukan potong stok otomatis saat checkout DAN HPP (Σ takaran × harga/satuan bahan).
 import 'package:coffee_core/coffee_core.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -25,7 +25,6 @@ class _MenuPageState extends State<MenuPage> {
 
   final _name = TextEditingController();
   final _price = TextEditingController();
-  final _cost = TextEditingController();
   final _imageUrl = TextEditingController();
   final _newCategory = TextEditingController();
   String? _categoryId;
@@ -39,7 +38,7 @@ class _MenuPageState extends State<MenuPage> {
 
   @override
   void dispose() {
-    for (final c in [_name, _price, _cost, _imageUrl, _newCategory]) {
+    for (final c in [_name, _price, _imageUrl, _newCategory]) {
       c.dispose();
     }
     super.dispose();
@@ -50,13 +49,23 @@ class _MenuPageState extends State<MenuPage> {
   Future<void> _load() async {
     try {
       final r = await Future.wait([_repo.categories(), _repo.menuItems(), _repo.ingredients(), _repo.recipes()]);
+      var items = r[1] as List<MenuItem>;
+      final ingredients = r[2] as List<Ingredient>;
+      final recipes = r[3] as List<Recipe>;
+      // HPP selalu mengikuti resep × harga bahan terbaru.
+      String? syncError;
+      try {
+        if (await _repo.syncMenuCosts(items, recipes, ingredients) > 0) items = await _repo.menuItems();
+      } catch (e) {
+        syncError = errorText(e);
+      }
       if (!mounted) return;
       setState(() {
         _categories = r[0] as List<MenuCategory>;
-        _items = r[1] as List<MenuItem>;
-        _ingredients = r[2] as List<Ingredient>;
-        _recipes = r[3] as List<Recipe>;
-        _error = null;
+        _items = items;
+        _ingredients = ingredients;
+        _recipes = recipes;
+        _error = syncError;
         _loading = false;
       });
     } catch (e) {
@@ -81,27 +90,24 @@ class _MenuPageState extends State<MenuPage> {
 
   Future<void> _addMenu() async {
     final price = parseMoney(_price.text);
-    final cost = _cost.text.trim().isEmpty ? 0.0 : parseMoney(_cost.text);
     if (_name.text.trim().isEmpty) return showSnack(context, 'Nama menu wajib diisi.', error: true);
     if (price == null) return showSnack(context, 'Harga tidak valid.', error: true);
-    if (cost == null) return showSnack(context, 'HPP tidak valid.', error: true);
     setState(() => _saving = true);
     await _run(
       () => _repo.addMenuItem(
         name: _name.text.trim(),
         categoryId: _categoryId,
         price: price,
-        cost: cost,
+        cost: 0, // dihitung otomatis setelah resep diisi
         imageUrl: _imageUrl.text.trim().isEmpty ? null : _imageUrl.text.trim(),
       ),
-      'Menu ditambahkan. Jangan lupa atur resepnya agar stok terpotong otomatis.',
+      'Menu ditambahkan. Isi resepnya: HPP dihitung otomatis dan stok terpotong saat terjual.',
     );
     if (!mounted) return;
     setState(() {
       _saving = false;
       _name.clear();
       _price.clear();
-      _cost.clear();
       _imageUrl.clear();
     });
   }
@@ -125,19 +131,26 @@ class _MenuPageState extends State<MenuPage> {
     }
   }
 
+  bool _hasRecipe(MenuItem item) => _recipes.any((r) => r.menuItemId == item.id);
+
   Future<void> _editPrice(MenuItem item) async {
     final price = TextEditingController(text: item.price.round().toString());
-    final cost = TextEditingController(text: item.cost.round().toString());
+    final hasRecipe = _hasRecipe(item);
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('Ubah harga: ${item.name}'),
         content: SizedBox(
           width: 360,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             TextField(controller: price, decoration: const InputDecoration(labelText: 'Harga jual', prefixText: 'Rp ')),
             const SizedBox(height: 12),
-            TextField(controller: cost, decoration: const InputDecoration(labelText: 'HPP / modal', prefixText: 'Rp ')),
+            Text(
+              hasRecipe
+                  ? 'HPP ${formatRupiah(item.cost)} — dihitung otomatis dari resep.'
+                  : 'HPP belum bisa dihitung: menu ini belum punya resep.',
+              style: const TextStyle(color: AppColors.muted),
+            ),
           ]),
         ),
         actions: [
@@ -147,15 +160,13 @@ class _MenuPageState extends State<MenuPage> {
       ),
     );
     final p = parseMoney(price.text);
-    final c = parseMoney(cost.text);
     price.dispose();
-    cost.dispose();
     if (ok != true) return;
-    if (p == null || c == null) {
-      if (mounted) showSnack(context, 'Harga/HPP tidak valid.', error: true);
+    if (p == null) {
+      if (mounted) showSnack(context, 'Harga tidak valid.', error: true);
       return;
     }
-    await _run(() => _repo.updateMenuItem(item.id, price: p, cost: c), 'Harga diperbarui.');
+    await _run(() => _repo.updateMenuItem(item.id, price: p), 'Harga diperbarui.');
   }
 
   Future<void> _editRecipe(MenuItem item) async {
@@ -199,10 +210,12 @@ class _MenuPageState extends State<MenuPage> {
                   ),
                 ),
                 SizedBox(width: 160, child: TextField(controller: _price, decoration: const InputDecoration(labelText: 'Harga jual', prefixText: 'Rp '))),
-                SizedBox(width: 160, child: TextField(controller: _cost, decoration: const InputDecoration(labelText: 'HPP / modal', prefixText: 'Rp '))),
                 SizedBox(width: 380, child: TextField(controller: _imageUrl, decoration: const InputDecoration(labelText: 'URL gambar (opsional)'))),
               ]),
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
+              const Text('HPP dihitung otomatis dari resep (takaran × harga/satuan bahan).',
+                  style: TextStyle(color: AppColors.muted, fontSize: 13)),
+              const SizedBox(height: 12),
               Align(
                 alignment: Alignment.centerLeft,
                 child: FilledButton.icon(
@@ -254,8 +267,12 @@ class _MenuPageState extends State<MenuPage> {
                                 style: TextStyle(fontWeight: FontWeight.w600, color: item.isActive ? AppColors.text : AppColors.muted))),
                             DataCell(Text(categoryName[item.categoryId] ?? '—')),
                             DataCell(Text(formatRupiah(item.price))),
-                            DataCell(Text(formatRupiah(item.cost))),
-                            DataCell(Text(item.price > 0 ? '${((item.price - item.cost) / item.price * 100).round()}%' : '—')),
+                            DataCell(_hasRecipe(item)
+                                ? Text(formatRupiah(item.cost))
+                                : const Tooltip(message: 'Isi resep untuk menghitung HPP', child: Text('—', style: TextStyle(color: AppColors.muted)))),
+                            DataCell(Text(_hasRecipe(item) && item.price > 0
+                                ? '${((item.price - item.cost) / item.price * 100).round()}%'
+                                : '—')),
                             DataCell(
                               Builder(builder: (_) {
                                 final n = _recipes.where((r) => r.menuItemId == item.id).length;
@@ -342,6 +359,7 @@ class _RecipeDialogState extends State<_RecipeDialog> {
   @override
   Widget build(BuildContext context) {
     final byId = {for (final i in widget.ingredients) i.id: i};
+    final hpp = recipeCost(widget.item.id, _rows, byId);
     return AlertDialog(
       title: Text('Resep per porsi: ${widget.item.name}'),
       content: SizedBox(
@@ -358,8 +376,20 @@ class _RecipeDialogState extends State<_RecipeDialog> {
               dense: true,
               contentPadding: EdgeInsets.zero,
               title: Text(byId[r.ingredientId]?.name ?? 'Bahan dihapus'),
-              subtitle: Text('${formatNumber(r.qtyNeeded, maxFractionDigits: 3)} ${byId[r.ingredientId]?.unit ?? ''}'),
-              trailing: IconButton(tooltip: 'Hapus', onPressed: () => _remove(r), icon: const Icon(Icons.delete_outline, size: 18)),
+              subtitle: Text('${formatNumber(r.qtyNeeded, maxFractionDigits: 3)} ${byId[r.ingredientId]?.unit ?? ''}'
+                  ' × ${formatRupiahPrecise(byId[r.ingredientId]?.costPerUnit ?? 0)}'),
+              trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                Text(formatRupiah(r.qtyNeeded * (byId[r.ingredientId]?.costPerUnit ?? 0))),
+                IconButton(tooltip: 'Hapus', onPressed: () => _remove(r), icon: const Icon(Icons.delete_outline, size: 18)),
+              ]),
+            ),
+          if (hpp != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 4, right: 48),
+              child: Row(children: [
+                const Expanded(child: Text('HPP per porsi', style: TextStyle(fontWeight: FontWeight.w700))),
+                Text(formatRupiah(hpp), style: const TextStyle(fontWeight: FontWeight.w700)),
+              ]),
             ),
           const Divider(),
           Row(children: [

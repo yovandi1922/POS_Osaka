@@ -31,11 +31,23 @@ double? parseMoney(String value) {
   return digits.isEmpty ? null : double.parse(digits);
 }
 
-/// "0,5" / "0.5" → 0.5 ; kosong/invalid → null
+/// Format Indonesia & umum: "0,5" / "0.5" → 0.5 ; "1.000" / "1.234,5" → 1000 / 1234.5 ; kosong/invalid → null.
+/// Titik dianggap pemisah ribuan bila diikuti kelompok 3 digit dan tidak diawali 0 (sesuai [formatNumber]).
 double? parseDecimal(String value) {
-  final cleaned = value.trim().replaceAll(RegExp(r'\s'), '').replaceFirst(',', '.');
-  if (cleaned.isEmpty) return null;
-  return double.tryParse(cleaned);
+  var s = value.trim().replaceAll(RegExp(r'\s'), '');
+  if (s.isEmpty) return null;
+  if (s.contains(',')) {
+    s = s.replaceAll('.', '').replaceFirst(',', '.');
+  } else if (RegExp(r'^-?[1-9]\d{0,2}(\.\d{3})+$').hasMatch(s)) {
+    s = s.replaceAll('.', '');
+  }
+  return double.tryParse(s);
+}
+
+/// 18.95 → "Rp 18,95" ; 1200 → "Rp 1.200" (untuk harga per satuan yang bisa berdesimal)
+String formatRupiahPrecise(num? value) {
+  final v = value ?? 0;
+  return '${v < 0 ? '-' : ''}Rp ${formatNumber(v.abs(), maxFractionDigits: 2)}';
 }
 
 /// Tanggal lokal WIB "YYYY-MM-DD"

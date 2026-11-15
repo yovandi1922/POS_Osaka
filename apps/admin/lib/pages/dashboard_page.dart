@@ -142,7 +142,7 @@ class _DashboardPageState extends State<DashboardPage> {
             KpiCard(
               label: 'Pengeluaran bulan ini',
               value: formatRupiah(d.expensesMonth),
-              hint: 'Laba kasar: ${formatRupiah(d.revenueMonth - d.expensesMonth)}',
+              hint: 'Omset − pengeluaran: ${formatRupiah(d.revenueMonth - d.expensesMonth)}',
               icon: Icons.trending_down,
               tone: AppColors.danger,
               toneBg: AppColors.dangerSoft,

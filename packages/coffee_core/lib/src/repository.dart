@@ -160,6 +160,46 @@ class CoffeeRepository {
         });
       });
 
+  /// Ubah data master bahan. Stok TIDAK diubah di sini — pakai [adjustStock] agar tercatat di riwayat.
+  Future<void> updateIngredient(
+    String id, {
+    required String name,
+    required String unit,
+    required double minStock,
+    required double costPerUnit,
+  }) =>
+      _guard('Gagal memperbarui bahan', () async {
+        final updated = await client
+            .from('ingredients')
+            .update({'name': name, 'unit': unit, 'min_stock': minStock, 'cost_per_unit': costPerUnit})
+            .eq('id', id)
+            .select('id');
+        if (updated.isEmpty) throw CoffeeException('Anda tidak memiliki akses untuk aksi ini.');
+      });
+
+  /// Hapus bahan beserta baris resep yang memakainya (FK recipes → ingredients bersifat RESTRICT).
+  /// Riwayat stock_movements bahan ini ikut terhapus (ON DELETE CASCADE).
+  Future<void> deleteIngredient(String id) => _guard('Gagal menghapus bahan', () async {
+        await client.from('recipes').delete().eq('ingredient_id', id);
+        final deleted = await client.from('ingredients').delete().eq('id', id).select('id');
+        if (deleted.isEmpty) throw CoffeeException('Anda tidak memiliki akses untuk aksi ini.');
+      });
+
+  /// Samakan menu_items.cost dengan HPP hasil resep. Menu tanpa resep dibiarkan.
+  /// Mengembalikan jumlah menu yang HPP-nya diperbarui.
+  Future<int> syncMenuCosts(List<MenuItem> items, List<Recipe> recipes, List<Ingredient> ingredients) =>
+      _guard('Gagal menghitung HPP', () async {
+        final byId = {for (final i in ingredients) i.id: i};
+        var updated = 0;
+        for (final item in items) {
+          final cost = recipeCost(item.id, recipes, byId);
+          if (cost == null || (cost - item.cost).abs() < 0.005) continue;
+          await client.from('menu_items').update({'cost': cost}).eq('id', item.id);
+          updated++;
+        }
+        return updated;
+      });
+
   /// Stok masuk ('in') atau terbuang ('waste') via RPC adjust_stock — selalu tercatat di stock_movements.
   Future<Ingredient> adjustStock(String ingredientId, String type, double qty, {String? notes}) =>
       _guard('Gagal menyesuaikan stok', () async {
@@ -202,14 +242,16 @@ class CoffeeRepository {
         return SaleTransaction.fromJson(data);
       });
 
-  Future<List<SaleTransaction>> recentTransactions({int limit = 100}) => _guard('Gagal memuat transaksi', () async {
-        final rows = await client
-            .from('transactions')
-            .select('id, invoice_no, cashier_id, subtotal, discount, total, payment_method, paid_amount, change, status, created_at, '
-                'cashier:profiles!transactions_cashier_id_fkey ( name, email ), '
-                'transaction_items ( id, qty, price, subtotal, notes, menu_item:menu_items ( name ) )')
-            .order('created_at', ascending: false)
-            .limit(limit);
+  /// [from]/[to] = tanggal WIB "YYYY-MM-DD" (inklusif). RLS: kasir hanya melihat transaksinya sendiri.
+  Future<List<SaleTransaction>> recentTransactions({int limit = 100, String? from, String? to}) =>
+      _guard('Gagal memuat transaksi', () async {
+        var query = client.from('transactions').select(
+            'id, invoice_no, cashier_id, subtotal, discount, total, payment_method, paid_amount, change, status, created_at, '
+            'cashier:profiles!transactions_cashier_id_fkey ( name, email ), '
+            'transaction_items ( id, qty, price, subtotal, notes, menu_item:menu_items ( name ) )');
+        if (from != null) query = query.gte('created_at', '${from}T00:00:00+07:00');
+        if (to != null) query = query.lt('created_at', '${addDays(to, 1)}T00:00:00+07:00');
+        final rows = await query.order('created_at', ascending: false).limit(limit);
         return rows.map(SaleTransaction.fromJson).toList();
       });
 

@@ -24,6 +24,14 @@ void main() {
       expect(parseDecimal('0,5'), 0.5);
       expect(parseDecimal('0.5'), 0.5);
       expect(parseDecimal('abc'), isNull);
+      expect(parseDecimal('1.000'), 1000);
+      expect(parseDecimal('1.234,5'), 1234.5);
+      expect(parseDecimal('22,5'), 22.5);
+      expect(parseDecimal('0.500'), 0.5);
+      expect(parseDecimal('1.5'), 1.5);
+      expect(parseDecimal(formatNumber(12500.25)), 12500.25);
+      expect(formatRupiahPrecise(18.95), 'Rp 18,95');
+      expect(formatRupiahPrecise(1200), 'Rp 1.200');
     });
 
     test('tanggal WIB', () {
@@ -77,6 +85,31 @@ void main() {
       expect(ok.meta.daysOfData, 3);
       expect(ok.meta.lowAccuracy, isTrue);
       expect(ok.predictions.map((p) => p.predicted), [600000, 600000, 600000]);
+    });
+  });
+
+  group('recipeCost', () {
+    const ing = {
+      'kopi': Ingredient(id: 'kopi', name: 'Kopi', unit: 'gram', currentStock: 0, minStock: 0, costPerUnit: 250),
+      'susu': Ingredient(id: 'susu', name: 'Susu', unit: 'ml', currentStock: 0, minStock: 0, costPerUnit: 22.5),
+    };
+    const recipes = [
+      Recipe(id: '1', menuItemId: 'latte', ingredientId: 'kopi', qtyNeeded: 18),
+      Recipe(id: '2', menuItemId: 'latte', ingredientId: 'susu', qtyNeeded: 150.5),
+      Recipe(id: '3', menuItemId: 'espresso', ingredientId: 'kopi', qtyNeeded: 18),
+    ];
+
+    test('menjumlahkan takaran × harga/satuan, dibulatkan 2 desimal', () {
+      expect(recipeCost('latte', recipes, ing), 4500 + 3386.25);
+      expect(recipeCost('espresso', recipes, ing), 4500);
+    });
+
+    test('null bila menu belum punya resep', () {
+      expect(recipeCost('teh', recipes, ing), isNull);
+    });
+
+    test('bahan yang sudah dihapus dihitung 0', () {
+      expect(recipeCost('latte', recipes, {'kopi': ing['kopi']!}), 4500);
     });
   });
 

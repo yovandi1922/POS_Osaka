@@ -17,13 +17,16 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _email = TextEditingController();
   final _password = TextEditingController();
+  final _passwordFocus = FocusNode();
   bool _loading = false;
+  bool _showPassword = false;
   String? _error;
 
   @override
   void dispose() {
     _email.dispose();
     _password.dispose();
+    _passwordFocus.dispose();
     super.dispose();
   }
 
@@ -82,15 +85,25 @@ class _LoginPageState extends State<LoginPage> {
                               controller: _email,
                               keyboardType: TextInputType.emailAddress,
                               autofillHints: const [AutofillHints.email],
+                              textInputAction: TextInputAction.next,
+                              onSubmitted: (_) => _passwordFocus.requestFocus(),
                               decoration: const InputDecoration(labelText: 'Email', hintText: 'owner@coffeeshop.id'),
                             ),
                             const SizedBox(height: 12),
                             TextField(
                               controller: _password,
-                              obscureText: true,
+                              focusNode: _passwordFocus,
+                              obscureText: !_showPassword,
                               autofillHints: const [AutofillHints.password],
                               onSubmitted: (_) => _submit(),
-                              decoration: const InputDecoration(labelText: 'Password'),
+                              decoration: InputDecoration(
+                                labelText: 'Password',
+                                suffixIcon: IconButton(
+                                  tooltip: _showPassword ? 'Sembunyikan password' : 'Tampilkan password',
+                                  onPressed: () => setState(() => _showPassword = !_showPassword),
+                                  icon: Icon(_showPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 20),
+                                ),
+                              ),
                             ),
                             const SizedBox(height: 16),
                             FilledButton(

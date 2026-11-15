@@ -1,6 +1,7 @@
 // apps/api/app/api/health/route.ts
 // Cek cepat bahwa API hidup & env sudah lengkap (tanpa membocorkan nilai rahasia).
 import { json, preflight } from '@/lib/http';
+import { midtransConfigured, midtransIsProduction } from '@/lib/midtrans';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,7 +24,9 @@ export function GET(request: Request) {
       SUPABASE_ANON_KEY: configured(process.env.SUPABASE_ANON_KEY),
       SUPABASE_SERVICE_ROLE_KEY: configured(process.env.SUPABASE_SERVICE_ROLE_KEY),
       ANTHROPIC_API_KEY: configured(process.env.ANTHROPIC_API_KEY),
+      MIDTRANS_SERVER_KEY: midtransConfigured(),
     },
     model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-5',
+    midtrans: midtransIsProduction() ? 'production' : 'sandbox',
   });
 }

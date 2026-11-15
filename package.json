@@ -14,5 +14,8 @@
     "typecheck": "pnpm -r typecheck",
     "db:push": "supabase db push",
     "db:reset": "supabase db reset"
+  },
+  "devDependencies": {
+    "supabase": "^3.0.0"
   }
 }

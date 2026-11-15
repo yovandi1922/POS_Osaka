@@ -76,6 +76,11 @@ void main() {
 
     await tester.tap(find.text('QRIS'));
     await tester.pump();
-    expect(find.textContaining('Pastikan pembayaran QRIS'), findsOneWidget);
+    expect(find.text('Tampilkan QRIS · Rp 44.000'), findsOneWidget);
+    expect(find.textContaining('Catat manual'), findsOneWidget);
+
+    await tester.tap(find.text('Debit'));
+    await tester.pump();
+    expect(find.textContaining('Pastikan pembayaran Debit'), findsOneWidget);
   });
 }

@@ -98,7 +98,9 @@ class _ExpensesPageState extends State<ExpensesPage> {
     if (!await confirmDialog(context, 'Hapus pengeluaran', 'Hapus ${e.category} ${formatRupiah(e.amount)}?')) return;
     try {
       await _repo.deleteExpense(e.id);
-      if (mounted) setState(() => _rows = _rows.where((r) => r.id != e.id).toList());
+      if (!mounted) return;
+      setState(() => _rows = _rows.where((r) => r.id != e.id).toList());
+      showSnack(context, 'Pengeluaran dihapus.');
     } catch (err) {
       if (mounted) showSnack(context, errorText(err), error: true);
     }

@@ -114,6 +114,8 @@ Paste isi `supabase/seed_demo_history.sql` ke **SQL Editor** lalu **Run** (butuh
 | `ANTHROPIC_API_KEY` | API key Anthropic |
 | `ANTHROPIC_MODEL` | opsional, default `claude-sonnet-4-5` |
 | `CORS_ALLOWED_ORIGINS` | origin web admin, mis. `https://coffee-admin.vercel.app` (default `*`) |
+| `MIDTRANS_SERVER_KEY` | **rahasia**, server key Midtrans untuk QRIS dinamis (`SB-Mid-server-…` untuk sandbox) |
+| `MIDTRANS_IS_PRODUCTION` | `false` (sandbox, default) atau `true` dengan server key produksi |
 
 **Flutter** — salin `env.example.json` → `env.json` di `apps/mobile` **dan** `apps/admin`:
 
@@ -154,6 +156,21 @@ cd apps/mobile && dart analyze && flutter test       # unit + smoke test semua t
 cd apps/admin  && dart analyze && flutter test       # smoke test 9 halaman × desktop & ponsel
 pnpm typecheck && pnpm build:api
 ```
+
+### QRIS dinamis (Midtrans)
+
+Kasir memilih **QRIS → Tampilkan QRIS**. API membuat QR lewat Midtrans Core API (`POST /api/payments/qris`, harga
+dihitung server), app mengecek status tiap 3 detik (`GET /api/payments/qris?order_id=…`), dan begitu Midtrans
+menyatakan lunas, **server** memanggil `create_transaction` sebagai kasir tersebut (invoice dibuat, stok terpotong)
+tepat satu kali. Belum perlu webhook, jadi bisa dites di lokal. Opsi "Catat manual" tetap ada untuk QRIS statis.
+
+1. Jalankan migrasi `supabase/migrations/004_qris_payments.sql` (`supabase db push` atau paste ke SQL Editor).
+2. Daftar di <https://dashboard.sandbox.midtrans.com> → **Settings → Access Keys** → salin *Server Key* ke
+   `MIDTRANS_SERVER_KEY` di `apps/api/.env.local`, restart API, cek `/api/health` → `MIDTRANS_SERVER_KEY: true`.
+3. Uji bayar sandbox: QR sandbox tidak bisa di-scan e-wallet asli. Di layar QR tekan **Salin URL QR**, buka
+   <https://simulator.sandbox.midtrans.com/v2/qris/index>, tempel URL, klik **Pay** → app otomatis menampilkan sukses.
+
+Produksi: aktifkan QRIS di akun Midtrans produksi, ganti server key, set `MIDTRANS_IS_PRODUCTION=true`.
 
 ## 5. Deploy
 

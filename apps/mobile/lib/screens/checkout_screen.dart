@@ -1,6 +1,7 @@
 // apps/mobile/lib/screens/checkout_screen.dart
 // List item + tombol +/−, pilih metode cash/qris/debit, input uang bayar → kembalian otomatis.
 // Submit → RPC create_transaction (insert transaksi + item + auto-deduct stok + stock_movements).
+// QRIS → QrisScreen (Midtrans); transaksi dicatat server setelah lunas. Tetap ada opsi catat manual (QRIS statis).
 import 'package:coffee_core/coffee_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,6 +10,7 @@ import 'package:provider/provider.dart';
 import '../state/cart.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import 'qris_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -46,6 +48,42 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     super.dispose();
   }
 
+  /// QRIS dinamis: transaksi dicatat server setelah Midtrans menyatakan lunas.
+  Future<void> _payWithQris(Cart cart) async {
+    final navigator = Navigator.of(context);
+    final tx = await navigator.push<SaleTransaction>(
+      MaterialPageRoute(builder: (_) => QrisScreen(lines: List.of(cart.lines))),
+    );
+    if (tx == null || !mounted) return;
+    cart.clear();
+    await _showSuccess(tx);
+    navigator.popUntil((route) => route.isFirst);
+  }
+
+  Future<void> _showSuccess(SaleTransaction tx) => showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          icon: const Icon(Icons.check_circle, color: AppColors.success, size: 48),
+          title: const Text('Transaksi berhasil'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(tx.invoiceNo, style: const TextStyle(fontFamily: 'monospace')),
+              const SizedBox(height: 8),
+              Text('Total: ${formatRupiah(tx.total)}'),
+              if (tx.paymentMethod == PaymentMethod.cash) ...[
+                Text('Bayar: ${formatRupiah(tx.paidAmount)}'),
+                Text('Kembalian: ${formatRupiah(tx.change)}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+              ] else
+                Text('Metode: ${tx.paymentMethod.label}'),
+            ],
+          ),
+          actions: [FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('Transaksi baru'))],
+        ),
+      );
+
   Future<void> _submit(Cart cart) async {
     final total = cart.total;
     final paid = _method == PaymentMethod.cash ? parseMoney(_paid.text) : total;
@@ -63,30 +101,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       final tx = await repo.createTransaction(items: cart.lines, method: _method, paidAmount: paid);
       cart.clear();
       if (!mounted) return;
-      await showDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => AlertDialog(
-          icon: const Icon(Icons.check_circle, color: AppColors.success, size: 48),
-          title: const Text('Transaksi berhasil'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(tx.invoiceNo, style: const TextStyle(fontFamily: 'monospace')),
-              const SizedBox(height: 8),
-              Text('Total: ${formatRupiah(tx.total)}'),
-              if (tx.paymentMethod == PaymentMethod.cash) ...[
-                Text('Bayar: ${formatRupiah(tx.paidAmount)}'),
-                Text('Kembalian: ${formatRupiah(tx.change)}',
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
-              ] else
-                Text('Metode: ${tx.paymentMethod.label}'),
-            ],
-          ),
-          actions: [FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('Transaksi baru'))],
-        ),
-      );
+      await _showSuccess(tx);
       navigator.popUntil((route) => route.isFirst);
     } catch (e) {
       if (mounted) setState(() => _error = errorText(e));
@@ -236,6 +251,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         ),
                       ],
                     ),
+                  ] else if (_method == PaymentMethod.qris) ...[
+                    const Padding(
+                      padding: EdgeInsets.only(top: 12),
+                      child: Text(
+                        'QR dibuat otomatis (Midtrans). Transaksi tersimpan sendiri setelah pelanggan membayar.',
+                        style: TextStyle(color: AppColors.muted),
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        onPressed: _submitting ? null : () => _submit(cart),
+                        child: const Text('Sudah dibayar via QRIS statis? Catat manual'),
+                      ),
+                    ),
                   ] else
                     Padding(
                       padding: const EdgeInsets.only(top: 12),
@@ -249,12 +279,19 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          FilledButton(
-            onPressed: canSubmit && !_submitting ? () => _submit(cart) : null,
-            child: _submitting
-                ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-                : Text('Simpan transaksi · ${formatRupiah(total)}'),
-          ),
+          if (_method == PaymentMethod.qris)
+            FilledButton.icon(
+              onPressed: canSubmit && !_submitting ? () => _payWithQris(cart) : null,
+              icon: const Icon(Icons.qr_code_2),
+              label: Text('Tampilkan QRIS · ${formatRupiah(total)}'),
+            )
+          else
+            FilledButton(
+              onPressed: canSubmit && !_submitting ? () => _submit(cart) : null,
+              child: _submitting
+                  ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
+                  : Text('Simpan transaksi · ${formatRupiah(total)}'),
+            ),
         ],
       ),
     );

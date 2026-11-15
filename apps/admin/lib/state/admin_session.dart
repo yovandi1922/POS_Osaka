@@ -71,6 +71,17 @@ class AdminSession extends ChangeNotifier {
 
   Future<void> signOut() => _client.auth.signOut();
 
+  /// Muat ulang profil sendiri (mis. setelah nama/email diubah di halaman Pengguna).
+  Future<void> refreshProfile() async {
+    final uid = session?.user.id;
+    if (uid == null) return;
+    final p = await _repo.getProfile(uid);
+    if (p != null) {
+      profile = p;
+      notifyListeners();
+    }
+  }
+
   @override
   void dispose() {
     _sub.cancel();
